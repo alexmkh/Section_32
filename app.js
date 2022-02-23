@@ -6,7 +6,8 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const mongoose = require("mongoose");
-const encrypt = require("mongoose-encryption");
+const bcrypt = require("bcrypt");
+const saltRounds = 10;
 
 const app = express();
 
@@ -34,8 +35,6 @@ connection = mongoose.connect(uri, {
       password: String
     });
 
-    userSchema.plugin(encrypt, {secret: process.env.SECRET, encryptedFields: ['password']});
-
     User = new mongoose.model("User", userSchema);
     app.listen(3000, function() {
       console.log("Server started on port 3000.");
@@ -57,15 +56,21 @@ app.get("/register", (req, res) => {
 });
 
 app.post("/register", (req, res) => {
-  newUser = new User ({
-    email: req.body.username,
-    password: req.body.password
-  });
-  newUser.save( (err) => {
+  bcrypt.hash(req.body.password, saltRounds, (err, hash) => {
     if (err) {
-      res.send(err);
+      res.send("<h1>Error Salting</h1><h2>" + err + "</h2>");
     } else {
-      res.render("secrets");
+      newUser = new User ({
+        email: req.body.username,
+        password: hash
+      });
+      newUser.save( (err) => {
+        if (err) {
+          res.send(err);
+        } else {
+          res.render("secrets");
+        }
+      });
     }
   });
 });
@@ -79,10 +84,17 @@ app.post("/login", (req, res) => {
       console.log(err);
     } else {
       if (foundUser) {
-        if (foundUser.password === password) {
-          res.render("secrets");
-        }
+        bcrypt.compare(password, foundUser.password, (err, bcryptRes) => {
+          if (err || !bcryptRes) {
+            res.send("<h1>Error Logging</h1><h2>");
+          } else {
+            res.render("secrets");
+          }
+        });
       }
     }
   });
+
+
+
 });
